@@ -1,0 +1,470 @@
+
+==================================================
+ 0. Verificando acceso a los nodos
+==================================================
+10.0.10.1 OK (server1)
+10.0.10.2 OK (server2)
+10.0.10.3 OK (server3)
+
+==================================================
+ 1. Topologia base (Actividad 1)
+==================================================
+Faltan contenedores o VMs, se despliega la base con actividad1.sh
+
+==================================================
+ 0. Verificando acceso a los nodos
+==================================================
+10.0.10.1 OK (server1)
+10.0.10.2 OK (server2)
+10.0.10.3 OK (server3)
+
+==================================================
+ 1. Sin limpieza: se reutilizan los recursos existentes
+==================================================
+
+==================================================
+ 2. Server3: master (gateways, DHCP e internet)
+==================================================
+>>> [10.0.10.3] init_master.sh ens4
+6f0eb54f-2ce9-4b85-8110-2a5df45533bc
+    Bridge br-int
+        Port gw_vlan200
+            tag: 200
+            Interface gw_vlan200
+                type: internal
+        Port ens4
+            Interface ens4
+        Port dhcp_v200
+            tag: 200
+            Interface dhcp_v200
+                type: internal
+        Port dhcp_v100
+            tag: 100
+            Interface dhcp_v100
+                type: internal
+        Port gw_vlan100
+            tag: 100
+            Interface gw_vlan100
+                type: internal
+        Port br-int
+            Interface br-int
+                type: internal
+    ovs_version: "2.13.8"
+ip_forward = 1
+Chain FORWARD (policy DROP)
+>>> [10.0.10.3] create_network_vlan.sh 100 192.168.0.0/24 si 192.168.0.10,192.168.0.50
+DHCP activo en ns-dhcp-vlan100 (192.168.0.2) rango 192.168.0.10 - 192.168.0.50, gateway 192.168.0.1
+VLAN 100 creada: red 192.168.0.0/24, gateway 192.168.0.1 en gw_vlan100 (MTU 1400)
+>>> [10.0.10.3] create_network_vlan.sh 200 192.168.2.0/24 si 192.168.2.10,192.168.2.50
+DHCP activo en ns-dhcp-vlan200 (192.168.2.2) rango 192.168.2.10 - 192.168.2.50, gateway 192.168.2.1
+VLAN 200 creada: red 192.168.2.0/24, gateway 192.168.2.1 en gw_vlan200 (MTU 1400)
+>>> [10.0.10.3] internet_to_network.sh 100 192.168.0.0/24
+Salida a internet habilitada para VLAN 100 (192.168.0.0/24) via ens3
+-A POSTROUTING -s 192.168.0.0/24 -o ens3 -j MASQUERADE
+-A FORWARD -s 192.168.0.0/24 -i gw_vlan100 -o ens3 -j ACCEPT
+-A FORWARD -d 192.168.0.0/24 -i ens3 -o gw_vlan100 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+>>> [10.0.10.3] internet_to_network.sh 200 192.168.2.0/24
+Salida a internet habilitada para VLAN 200 (192.168.2.0/24) via ens3
+-A POSTROUTING -s 192.168.2.0/24 -o ens3 -j MASQUERADE
+-A FORWARD -s 192.168.2.0/24 -i gw_vlan200 -o ens3 -j ACCEPT
+-A FORWARD -d 192.168.2.0/24 -i ens3 -o gw_vlan200 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+==================================================
+ 3. Server1: worker con contenedores
+==================================================
+>>> [10.0.10.1] init_worker.sh ens4
+44a77839-8a54-43e0-8ad6-4ccb8b9827e5
+    Bridge br-int
+        Port br-int
+            Interface br-int
+                type: internal
+        Port ens4
+            Interface ens4
+        Port vo_c9cb1a
+            tag: 100
+            Interface vo_c9cb1a
+        Port vo_77c4b8
+            tag: 200
+            Interface vo_77c4b8
+    ovs_version: "2.13.8"
+>>> [10.0.10.1] container_vlan100 ya existe, se reutiliza
+>>> [10.0.10.1] container_vlan200 ya existe, se reutiliza
+
+==================================================
+ 4. Server2: worker con VMs
+==================================================
+>>> [10.0.10.2] init_worker.sh ens4
+baa8600b-8220-4764-b51b-edaab6f6ac5d
+    Bridge br-int
+        Port br-int
+            Interface br-int
+                type: internal
+        Port ens4
+            Interface ens4
+    ovs_version: "2.13.8"
+>>> [10.0.10.2] create_vm.sh vm_vlan100 br-int 100 5901
+qemu-system-x86_64: warning: host doesn't support requested feature: CPUID.80000001H:ECX.svm [bit 2]
+VM vm_vlan100 creada
+  PID:    160800
+  Disco:  /var/lib/vms/vm_vlan100.qcow2 (base cirros-0.5.1-x86_64-disk.img)
+  TAP:    tap100_1 en br-int (VLAN 100)
+  MAC:    52:54:00:5d:0c:1d
+  VNC:    puerto 5901
+>>> [10.0.10.2] create_vm.sh vm_vlan200 br-int 200 5902
+qemu-system-x86_64: warning: host doesn't support requested feature: CPUID.80000001H:ECX.svm [bit 2]
+VM vm_vlan200 creada
+  PID:    160995
+  Disco:  /var/lib/vms/vm_vlan200.qcow2 (base cirros-0.5.1-x86_64-disk.img)
+  TAP:    tap200_2 en br-int (VLAN 200)
+  MAC:    52:54:00:dd:72:1c
+  VNC:    puerto 5902
+
+==================================================
+ 5. Validacion
+==================================================
+Esperando 60 s a que las VMs obtengan IP...
+
+--- Topologia OVS ---
+## server1
+44a77839-8a54-43e0-8ad6-4ccb8b9827e5
+    Bridge br-int
+        Port br-int
+            Interface br-int
+                type: internal
+        Port ens4
+            Interface ens4
+        Port vo_c9cb1a
+            tag: 100
+            Interface vo_c9cb1a
+        Port vo_77c4b8
+            tag: 200
+            Interface vo_77c4b8
+    ovs_version: "2.13.8"
+## server2
+baa8600b-8220-4764-b51b-edaab6f6ac5d
+    Bridge br-int
+        Port br-int
+            Interface br-int
+                type: internal
+        Port tap100_1
+            tag: 100
+            Interface tap100_1
+        Port tap200_2
+            tag: 200
+            Interface tap200_2
+        Port ens4
+            Interface ens4
+    ovs_version: "2.13.8"
+## server3
+6f0eb54f-2ce9-4b85-8110-2a5df45533bc
+    Bridge br-int
+        Port gw_vlan200
+            tag: 200
+            Interface gw_vlan200
+                type: internal
+        Port ens4
+            Interface ens4
+        Port dhcp_v200
+            tag: 200
+            Interface dhcp_v200
+                type: internal
+        Port dhcp_v100
+            tag: 100
+            Interface dhcp_v100
+                type: internal
+        Port gw_vlan100
+            tag: 100
+            Interface gw_vlan100
+                type: internal
+        Port br-int
+            Interface br-int
+                type: internal
+    ovs_version: "2.13.8"
+
+--- Server3: iptables ---
+-P FORWARD DROP
+-A FORWARD -s 192.168.0.0/24 -i gw_vlan100 -o ens3 -j ACCEPT
+-A FORWARD -d 192.168.0.0/24 -i ens3 -o gw_vlan100 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A FORWARD -s 192.168.2.0/24 -i gw_vlan200 -o ens3 -j ACCEPT
+-A FORWARD -d 192.168.2.0/24 -i ens3 -o gw_vlan200 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-P POSTROUTING ACCEPT
+-A POSTROUTING -s 192.168.0.0/24 -o ens3 -j MASQUERADE
+-A POSTROUTING -s 192.168.2.0/24 -o ens3 -j MASQUERADE
+
+--- Server3: leases DHCP ---
+## VLAN 100
+1790689087 52:54:00:5d:0c:1d 192.168.0.30 cirros 01:52:54:00:5d:0c:1d
+1790688745 1e:47:d1:a5:a8:03 192.168.0.10 * 01:1e:47:d1:a5:a8:03
+## VLAN 200
+1790689088 52:54:00:dd:72:1c 192.168.2.34 cirros 01:52:54:00:dd:72:1c
+1790688751 6e:0b:49:cc:c9:74 192.168.2.10 * 01:6e:0b:49:cc:c9:74
+
+--- Conectividad de VMs desde su gateway ---
+## ping 192.168.0.30 (VLAN 100)
+PING 192.168.0.30 (192.168.0.30) 56(84) bytes of data.
+64 bytes from 192.168.0.30: icmp_seq=1 ttl=64 time=5.61 ms
+64 bytes from 192.168.0.30: icmp_seq=2 ttl=64 time=1.94 ms
+
+--- 192.168.0.30 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1002ms
+rtt min/avg/max/mdev = 1.938/3.772/5.607/1.834 ms
+## ping 192.168.0.10 (VLAN 100)
+PING 192.168.0.10 (192.168.0.10) 56(84) bytes of data.
+64 bytes from 192.168.0.10: icmp_seq=1 ttl=64 time=4.09 ms
+64 bytes from 192.168.0.10: icmp_seq=2 ttl=64 time=0.700 ms
+
+--- 192.168.0.10 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1001ms
+rtt min/avg/max/mdev = 0.700/2.393/4.086/1.693 ms
+## ping 192.168.2.34 (VLAN 200)
+PING 192.168.2.34 (192.168.2.34) 56(84) bytes of data.
+64 bytes from 192.168.2.34: icmp_seq=1 ttl=64 time=6.54 ms
+64 bytes from 192.168.2.34: icmp_seq=2 ttl=64 time=16.9 ms
+
+--- 192.168.2.34 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1002ms
+rtt min/avg/max/mdev = 6.538/11.726/16.915/5.188 ms
+## ping 192.168.2.10 (VLAN 200)
+PING 192.168.2.10 (192.168.2.10) 56(84) bytes of data.
+64 bytes from 192.168.2.10: icmp_seq=1 ttl=64 time=3.77 ms
+64 bytes from 192.168.2.10: icmp_seq=2 ttl=64 time=0.804 ms
+
+--- 192.168.2.10 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1002ms
+rtt min/avg/max/mdev = 0.804/2.286/3.768/1.482 ms
+
+--- Contenedores: IP e internet ---
+## container_vlan100
+72: eth0    inet 192.168.0.10/24 brd 192.168.0.255 scope global eth0\       valid_lft forever preferred_lft forever
+PING 8.8.8.8 (8.8.8.8): 56 data bytes
+64 bytes from 8.8.8.8: seq=0 ttl=110 time=37.414 ms
+64 bytes from 8.8.8.8: seq=1 ttl=110 time=36.411 ms
+64 bytes from 8.8.8.8: seq=2 ttl=110 time=35.351 ms
+
+--- 8.8.8.8 ping statistics ---
+3 packets transmitted, 3 packets received, 0% packet loss
+round-trip min/avg/max = 35.351/36.392/37.414 ms
+## container_vlan200
+74: eth0    inet 192.168.2.10/24 brd 192.168.2.255 scope global eth0\       valid_lft forever preferred_lft forever
+PING 8.8.8.8 (8.8.8.8): 56 data bytes
+64 bytes from 8.8.8.8: seq=0 ttl=110 time=35.484 ms
+64 bytes from 8.8.8.8: seq=1 ttl=110 time=35.186 ms
+64 bytes from 8.8.8.8: seq=2 ttl=110 time=35.286 ms
+
+--- 8.8.8.8 ping statistics ---
+3 packets transmitted, 3 packets received, 0% packet loss
+round-trip min/avg/max = 35.186/35.318/35.484 ms
+
+--- Aislamiento entre VLANs (debe fallar) ---
+## container_vlan100 -> container_vlan200 (192.168.2.10)
+PING 192.168.2.10 (192.168.2.10): 56 data bytes
+
+--- 192.168.2.10 ping statistics ---
+3 packets transmitted, 0 packets received, 100% packet loss
+OK: las VLANs estan aisladas
+
+==================================================
+ Actividad 1 desplegada
+==================================================
+
+==================================================
+ 2. Server3: IPs actuales de las VMs
+==================================================
+vm_vlan100 (52:54:00:5d:0c:1d): 192.168.0.30
+vm_vlan200 (52:54:00:dd:72:1c): 192.168.2.34
+
+==================================================
+ 3. Server3: DHCP solo en VLAN 200, sin internet y con ruteo entre VLANs
+==================================================
+>>> [10.0.10.3] init_master.sh ens4
+6f0eb54f-2ce9-4b85-8110-2a5df45533bc
+    Bridge br-int
+        Port gw_vlan200
+            tag: 200
+            Interface gw_vlan200
+                type: internal
+        Port ens4
+            Interface ens4
+        Port dhcp_v200
+            tag: 200
+            Interface dhcp_v200
+                type: internal
+        Port dhcp_v100
+            tag: 100
+            Interface dhcp_v100
+                type: internal
+        Port gw_vlan100
+            tag: 100
+            Interface gw_vlan100
+                type: internal
+        Port br-int
+            Interface br-int
+                type: internal
+    ovs_version: "2.13.8"
+ip_forward = 1
+Chain FORWARD (policy DROP)
+>>> [10.0.10.3] create_network_vlan.sh 100 192.168.0.0/24 no
+DHCP deshabilitado para VLAN 100
+VLAN 100 creada: red 192.168.0.0/24, gateway 192.168.0.1 en gw_vlan100 (MTU 1400)
+>>> [10.0.10.3] create_network_vlan.sh 200 192.168.2.0/24 si 192.168.2.10,192.168.2.50
+DHCP activo en ns-dhcp-vlan200 (192.168.2.2) rango 192.168.2.10 - 192.168.2.50, gateway 192.168.2.1
+VLAN 200 creada: red 192.168.2.0/24, gateway 192.168.2.1 en gw_vlan200 (MTU 1400)
+>>> [10.0.10.3] no_internet_to_network.sh 100 192.168.0.0/24
+Salida a internet deshabilitada para VLAN 100 (192.168.0.0/24)
+>>> [10.0.10.3] no_internet_to_network.sh 200 192.168.2.0/24
+Salida a internet deshabilitada para VLAN 200 (192.168.2.0/24)
+>>> [10.0.10.3] routing_networks.sh 100 200
+Enrutamiento habilitado entre VLAN 100 y VLAN 200
+-A FORWARD -i gw_vlan100 -o gw_vlan200 -j ACCEPT
+-A FORWARD -i gw_vlan200 -o gw_vlan100 -j ACCEPT
+
+==================================================
+ 4. Server1: contenedores (VLAN 100 estatica, VLAN 200 por DHCP)
+==================================================
+>>> [10.0.10.1] set_static_ip_container.sh container_vlan100 192.168.0.11/24 192.168.0.1
+Contenedor container_vlan100 configurado con IP estatica 192.168.0.11/24, gateway 192.168.0.1
+72: eth0    inet 192.168.0.11/24 scope global eth0\       valid_lft forever preferred_lft forever
+default via 192.168.0.1 dev eth0 
+192.168.0.0/24 dev eth0 scope link  src 192.168.0.11 
+>>> [10.0.10.1] set_dhcp_container.sh container_vlan200
+Contenedor container_vlan200 configurado por DHCP
+74: eth0    inet 192.168.2.10/24 brd 192.168.2.255 scope global eth0\       valid_lft forever preferred_lft forever
+default via 192.168.2.1 dev eth0  metric 274 
+192.168.2.0/24 dev eth0 scope link  src 192.168.2.10 
+
+==================================================
+ 5. Server2: VMs (VLAN 100 estatica, VLAN 200 por DHCP)
+==================================================
+>>> [10.0.10.3] set_static_ip_vm.sh 192.168.0.30 192.168.0.12/24 192.168.0.1
+VM configurada con IP estatica 192.168.0.12/24, gateway 192.168.0.1
+mtu 1400
+2: eth0    inet 192.168.0.12/24 scope global eth0\       valid_lft forever preferred_lft forever
+default via 192.168.0.1 dev eth0 
+192.168.0.0/24 dev eth0 scope link  src 192.168.0.12 
+>>> vm_vlan200 ya usa DHCP (192.168.2.34), se reutiliza
+Esperando que vm_vlan200 responda con su IP de DHCP 
+vm_vlan200 obtuvo 192.168.2.34
+
+==================================================
+ 6. Validacion
+==================================================
+--- Server3: OVS (solo dhcp_v200) ---
+6f0eb54f-2ce9-4b85-8110-2a5df45533bc
+    Bridge br-int
+        Port gw_vlan200
+            tag: 200
+            Interface gw_vlan200
+                type: internal
+        Port ens4
+            Interface ens4
+        Port dhcp_v200
+            tag: 200
+            Interface dhcp_v200
+                type: internal
+        Port gw_vlan100
+            tag: 100
+            Interface gw_vlan100
+                type: internal
+        Port br-int
+            Interface br-int
+                type: internal
+    ovs_version: "2.13.8"
+
+--- Server3: namespaces y dnsmasq (solo VLAN 200) ---
+ns-dhcp-vlan200 (id: 1)
+171249 dnsmasq --interface=dhcp_v200 --bind-interfaces --except-interface=lo --port=0 --dhcp-range=192.168.2.10,192.168.2.50,255.255.255.0,12h --dhcp-option=3,192.168.2.1 --dhcp-option=6,8.8.8.8 --dhcp-option=26,1400 --dhcp-leasefile=/var/lib/misc/dnsmasq-vlan200.leases --pid-file=/var/run/dnsmasq-vlan200.pid
+
+--- Server3: iptables (ruteo entre VLANs, sin internet) ---
+-P FORWARD DROP
+-A FORWARD -i gw_vlan100 -o gw_vlan200 -j ACCEPT
+-A FORWARD -i gw_vlan200 -o gw_vlan100 -j ACCEPT
+-P POSTROUTING ACCEPT
+-P FORWARD ACCEPT
+
+--- Server3: leases DHCP VLAN 200 ---
+1790689154 6e:0b:49:cc:c9:74 192.168.2.10 * 01:6e:0b:49:cc:c9:74
+1790689088 52:54:00:dd:72:1c 192.168.2.34 cirros 01:52:54:00:dd:72:1c
+
+--- Direccionamiento de los endpoints ---
+## container_vlan100 (estatica)
+72: eth0    inet 192.168.0.11/24 scope global eth0\       valid_lft forever preferred_lft forever
+default via 192.168.0.1 dev eth0 
+192.168.0.0/24 dev eth0 scope link  src 192.168.0.11 
+## container_vlan200 (DHCP)
+74: eth0    inet 192.168.2.10/24 brd 192.168.2.255 scope global eth0\       valid_lft forever preferred_lft forever
+default via 192.168.2.1 dev eth0  metric 274 
+192.168.2.0/24 dev eth0 scope link  src 192.168.2.10 
+## vm_vlan100 (estatica)
+2: eth0    inet 192.168.0.12/24 scope global eth0\       valid_lft forever preferred_lft forever
+default via 192.168.0.1 dev eth0 
+192.168.0.0/24 dev eth0 scope link  src 192.168.0.12 
+## vm_vlan200 (DHCP)
+2: eth0    inet 192.168.2.34/24 brd 192.168.2.255 scope global eth0\       valid_lft forever preferred_lft forever
+default via 192.168.2.1 dev eth0 
+192.168.2.0/24 dev eth0 scope link  src 192.168.2.34 
+
+--- Ruteo entre VLANs (debe funcionar) ---
+## container_vlan100 (192.168.0.11) -> container_vlan200 (192.168.2.10)
+PING 192.168.2.10 (192.168.2.10): 56 data bytes
+64 bytes from 192.168.2.10: seq=0 ttl=63 time=11.134 ms
+64 bytes from 192.168.2.10: seq=1 ttl=63 time=1.307 ms
+64 bytes from 192.168.2.10: seq=2 ttl=63 time=1.795 ms
+
+--- 192.168.2.10 ping statistics ---
+3 packets transmitted, 3 packets received, 0% packet loss
+round-trip min/avg/max = 1.307/4.745/11.134 ms
+OK: ruteo contenedor VLAN 100 -> contenedor VLAN 200
+## container_vlan200 (192.168.2.10) -> vm_vlan100 (192.168.0.12)
+PING 192.168.0.12 (192.168.0.12): 56 data bytes
+64 bytes from 192.168.0.12: seq=0 ttl=63 time=2.153 ms
+64 bytes from 192.168.0.12: seq=1 ttl=63 time=2.369 ms
+64 bytes from 192.168.0.12: seq=2 ttl=63 time=2.307 ms
+
+--- 192.168.0.12 ping statistics ---
+3 packets transmitted, 3 packets received, 0% packet loss
+round-trip min/avg/max = 2.153/2.276/2.369 ms
+OK: ruteo contenedor VLAN 200 -> VM VLAN 100
+## vm_vlan100 (192.168.0.12) -> vm_vlan200 (192.168.2.34)
+PING 192.168.2.34 (192.168.2.34): 56 data bytes
+64 bytes from 192.168.2.34: seq=0 ttl=63 time=3.892 ms
+64 bytes from 192.168.2.34: seq=1 ttl=63 time=2.976 ms
+64 bytes from 192.168.2.34: seq=2 ttl=63 time=3.573 ms
+
+--- 192.168.2.34 ping statistics ---
+3 packets transmitted, 3 packets received, 0% packet loss
+round-trip min/avg/max = 2.976/3.480/3.892 ms
+OK: ruteo VM VLAN 100 -> VM VLAN 200
+## traceroute container_vlan100 -> vm_vlan200 (debe pasar por 192.168.0.1)
+traceroute to 192.168.2.34 (192.168.2.34), 3 hops max, 46 byte packets
+ 1  192.168.0.1  2.069 ms  0.538 ms  0.481 ms
+ 2  192.168.2.34  1.876 ms  1.911 ms  1.528 ms
+
+--- Sin salida a internet (debe fallar) ---
+## container_vlan100
+PING 8.8.8.8 (8.8.8.8): 56 data bytes
+
+--- 8.8.8.8 ping statistics ---
+3 packets transmitted, 0 packets received, 100% packet loss
+OK: container_vlan100 sin internet
+## container_vlan200
+PING 8.8.8.8 (8.8.8.8): 56 data bytes
+
+--- 8.8.8.8 ping statistics ---
+3 packets transmitted, 0 packets received, 100% packet loss
+OK: container_vlan200 sin internet
+## vm_vlan100
+PING 8.8.8.8 (8.8.8.8): 56 data bytes
+
+--- 8.8.8.8 ping statistics ---
+3 packets transmitted, 0 packets received, 100% packet loss
+OK: vm_vlan100 sin internet
+## vm_vlan200
+PING 8.8.8.8 (8.8.8.8): 56 data bytes
+
+--- 8.8.8.8 ping statistics ---
+3 packets transmitted, 0 packets received, 100% packet loss
+OK: vm_vlan200 sin internet
+
+==================================================
+ Actividad 4 desplegada
+==================================================

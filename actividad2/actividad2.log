@@ -1,0 +1,191 @@
+
+==================================================
+ 0. Verificando acceso a los nodos
+==================================================
+10.0.10.1 OK (server1)
+10.0.10.2 OK (server2)
+10.0.10.3 OK (server3)
+
+==================================================
+ 1. Topologia base (Actividad 1)
+==================================================
+Contenedores y VMs existentes, se reutilizan
+
+==================================================
+ 2. Server3: IPs actuales de las VMs
+==================================================
+vm_vlan100 (52:54:00:5d:0c:1d): 192.168.0.12
+vm_vlan200 (52:54:00:dd:72:1c): 192.168.2.12
+
+==================================================
+ 3. Server3: gateways sin DHCP y con salida a internet
+==================================================
+>>> [10.0.10.3] init_master.sh ens4
+6f0eb54f-2ce9-4b85-8110-2a5df45533bc
+    Bridge br-int
+        Port ens4
+            Interface ens4
+        Port br-int
+            Interface br-int
+                type: internal
+        Port gw_vlan100
+            tag: 100
+            Interface gw_vlan100
+                type: internal
+        Port gw_vlan200
+            tag: 200
+            Interface gw_vlan200
+                type: internal
+    ovs_version: "2.13.8"
+ip_forward = 1
+Chain FORWARD (policy DROP)
+>>> [10.0.10.3] create_network_vlan.sh 100 192.168.0.0/24 no
+DHCP deshabilitado para VLAN 100
+VLAN 100 creada: red 192.168.0.0/24, gateway 192.168.0.1 en gw_vlan100 (MTU 1400)
+>>> [10.0.10.3] internet_to_network.sh 100 192.168.0.0/24
+Salida a internet habilitada para VLAN 100 (192.168.0.0/24) via ens3
+-A POSTROUTING -s 192.168.0.0/24 -o ens3 -j MASQUERADE
+-A FORWARD -s 192.168.0.0/24 -i gw_vlan100 -o ens3 -j ACCEPT
+-A FORWARD -d 192.168.0.0/24 -i ens3 -o gw_vlan100 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+>>> [10.0.10.3] create_network_vlan.sh 200 192.168.2.0/24 no
+DHCP deshabilitado para VLAN 200
+VLAN 200 creada: red 192.168.2.0/24, gateway 192.168.2.1 en gw_vlan200 (MTU 1400)
+>>> [10.0.10.3] internet_to_network.sh 200 192.168.2.0/24
+Salida a internet habilitada para VLAN 200 (192.168.2.0/24) via ens3
+-A POSTROUTING -s 192.168.2.0/24 -o ens3 -j MASQUERADE
+-A FORWARD -s 192.168.2.0/24 -i gw_vlan200 -o ens3 -j ACCEPT
+-A FORWARD -d 192.168.2.0/24 -i ens3 -o gw_vlan200 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+==================================================
+ 4. Server1: IPs estaticas en contenedores
+==================================================
+>>> [10.0.10.1] set_static_ip_container.sh container_vlan100 192.168.0.11/24 192.168.0.1
+Contenedor container_vlan100 configurado con IP estatica 192.168.0.11/24, gateway 192.168.0.1
+60: eth0    inet 192.168.0.11/24 scope global eth0\       valid_lft forever preferred_lft forever
+default via 192.168.0.1 dev eth0 
+192.168.0.0/24 dev eth0 scope link  src 192.168.0.11 
+>>> [10.0.10.1] set_static_ip_container.sh container_vlan200 192.168.2.11/24 192.168.2.1
+Contenedor container_vlan200 configurado con IP estatica 192.168.2.11/24, gateway 192.168.2.1
+62: eth0    inet 192.168.2.11/24 scope global eth0\       valid_lft forever preferred_lft forever
+default via 192.168.2.1 dev eth0 
+192.168.2.0/24 dev eth0 scope link  src 192.168.2.11 
+
+==================================================
+ 5. Server2: IPs estaticas en VMs (via SSH desde Server3)
+==================================================
+>>> [10.0.10.3] set_static_ip_vm.sh 192.168.0.12 192.168.0.12/24 192.168.0.1
+VM configurada con IP estatica 192.168.0.12/24, gateway 192.168.0.1
+mtu 1400
+2: eth0    inet 192.168.0.12/24 scope global eth0\       valid_lft forever preferred_lft forever
+default via 192.168.0.1 dev eth0 
+192.168.0.0/24 dev eth0 scope link  src 192.168.0.12 
+>>> [10.0.10.3] set_static_ip_vm.sh 192.168.2.12 192.168.2.12/24 192.168.2.1
+VM configurada con IP estatica 192.168.2.12/24, gateway 192.168.2.1
+mtu 1400
+2: eth0    inet 192.168.2.12/24 scope global eth0\       valid_lft forever preferred_lft forever
+default via 192.168.2.1 dev eth0 
+192.168.2.0/24 dev eth0 scope link  src 192.168.2.12 
+
+==================================================
+ 6. Validacion
+==================================================
+--- Server3: OVS (sin puertos dhcp_v*) ---
+6f0eb54f-2ce9-4b85-8110-2a5df45533bc
+    Bridge br-int
+        Port ens4
+            Interface ens4
+        Port br-int
+            Interface br-int
+                type: internal
+        Port gw_vlan100
+            tag: 100
+            Interface gw_vlan100
+                type: internal
+        Port gw_vlan200
+            tag: 200
+            Interface gw_vlan200
+                type: internal
+    ovs_version: "2.13.8"
+
+--- Server3: namespaces y dnsmasq (deben estar vacios) ---
+Namespaces: 0
+dnsmasq no esta en ejecucion
+
+--- Server3: iptables ---
+-P FORWARD DROP
+-A FORWARD -s 192.168.0.0/24 -i gw_vlan100 -o ens3 -j ACCEPT
+-A FORWARD -d 192.168.0.0/24 -i ens3 -o gw_vlan100 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A FORWARD -s 192.168.2.0/24 -i gw_vlan200 -o ens3 -j ACCEPT
+-A FORWARD -d 192.168.2.0/24 -i ens3 -o gw_vlan200 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-P POSTROUTING ACCEPT
+-A POSTROUTING -s 192.168.0.0/24 -o ens3 -j MASQUERADE
+-A POSTROUTING -s 192.168.2.0/24 -o ens3 -j MASQUERADE
+-P FORWARD ACCEPT
+-A FORWARD -i gw_vlan100 -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1360
+-A FORWARD -o gw_vlan100 -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1360
+-A FORWARD -i gw_vlan200 -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1360
+-A FORWARD -o gw_vlan200 -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1360
+
+--- Contenedores: IP estatica e internet ---
+## container_vlan100
+60: eth0    inet 192.168.0.11/24 scope global eth0\       valid_lft forever preferred_lft forever
+PING 8.8.8.8 (8.8.8.8): 56 data bytes
+64 bytes from 8.8.8.8: seq=0 ttl=110 time=42.103 ms
+64 bytes from 8.8.8.8: seq=1 ttl=110 time=36.168 ms
+64 bytes from 8.8.8.8: seq=2 ttl=110 time=35.716 ms
+
+--- 8.8.8.8 ping statistics ---
+3 packets transmitted, 3 packets received, 0% packet loss
+round-trip min/avg/max = 35.716/37.995/42.103 ms
+## container_vlan200
+62: eth0    inet 192.168.2.11/24 scope global eth0\       valid_lft forever preferred_lft forever
+PING 8.8.8.8 (8.8.8.8): 56 data bytes
+64 bytes from 8.8.8.8: seq=0 ttl=110 time=42.101 ms
+64 bytes from 8.8.8.8: seq=1 ttl=110 time=35.533 ms
+64 bytes from 8.8.8.8: seq=2 ttl=110 time=35.537 ms
+
+--- 8.8.8.8 ping statistics ---
+3 packets transmitted, 3 packets received, 0% packet loss
+round-trip min/avg/max = 35.533/37.723/42.101 ms
+
+--- VMs: IP estatica e internet ---
+## vm_vlan100 (192.168.0.12)
+2: eth0    inet 192.168.0.12/24 scope global eth0\       valid_lft forever preferred_lft forever
+default via 192.168.0.1 dev eth0 
+PING 8.8.8.8 (8.8.8.8): 56 data bytes
+64 bytes from 8.8.8.8: seq=0 ttl=110 time=36.311 ms
+64 bytes from 8.8.8.8: seq=1 ttl=110 time=37.036 ms
+64 bytes from 8.8.8.8: seq=2 ttl=110 time=36.846 ms
+
+--- 8.8.8.8 ping statistics ---
+3 packets transmitted, 3 packets received, 0% packet loss
+round-trip min/avg/max = 36.311/36.731/37.036 ms
+## vm_vlan200 (192.168.2.12)
+2: eth0    inet 192.168.2.12/24 scope global eth0\       valid_lft forever preferred_lft forever
+default via 192.168.2.1 dev eth0 
+PING 8.8.8.8 (8.8.8.8): 56 data bytes
+64 bytes from 8.8.8.8: seq=0 ttl=110 time=36.390 ms
+64 bytes from 8.8.8.8: seq=1 ttl=110 time=36.613 ms
+64 bytes from 8.8.8.8: seq=2 ttl=110 time=36.144 ms
+
+--- 8.8.8.8 ping statistics ---
+3 packets transmitted, 3 packets received, 0% packet loss
+round-trip min/avg/max = 36.144/36.382/36.613 ms
+
+--- Aislamiento entre VLANs (debe fallar) ---
+## container_vlan100 -> container_vlan200 (192.168.2.11)
+PING 192.168.2.11 (192.168.2.11): 56 data bytes
+
+--- 192.168.2.11 ping statistics ---
+3 packets transmitted, 0 packets received, 100% packet loss
+OK: las VLANs estan aisladas
+## vm_vlan100 -> vm_vlan200 (192.168.2.12)
+PING 192.168.2.12 (192.168.2.12): 56 data bytes
+
+--- 192.168.2.12 ping statistics ---
+3 packets transmitted, 0 packets received, 100% packet loss
+OK: las VLANs estan aisladas
+
+==================================================
+ Actividad 2 desplegada
+==================================================

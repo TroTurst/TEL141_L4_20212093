@@ -1,0 +1,248 @@
+
+==================================================
+ 0. Verificando acceso a los nodos
+==================================================
+10.0.10.1 OK (server1)
+10.0.10.2 OK (server2)
+10.0.10.3 OK (server3)
+
+==================================================
+ 1. Sin limpieza: se reutilizan los recursos existentes
+==================================================
+
+==================================================
+ 2. Server3: master (gateways, DHCP e internet)
+==================================================
+>>> [10.0.10.3] init_master.sh ens4
+6f0eb54f-2ce9-4b85-8110-2a5df45533bc
+    Bridge br-int
+        Port dhcp_v100
+            tag: 100
+            Interface dhcp_v100
+                type: internal
+        Port ens4
+            Interface ens4
+        Port br-int
+            Interface br-int
+                type: internal
+        Port dhcp_v200
+            tag: 200
+            Interface dhcp_v200
+                type: internal
+        Port gw_vlan100
+            tag: 100
+            Interface gw_vlan100
+                type: internal
+        Port gw_vlan200
+            tag: 200
+            Interface gw_vlan200
+                type: internal
+    ovs_version: "2.13.8"
+ip_forward = 1
+Chain FORWARD (policy DROP)
+>>> [10.0.10.3] create_network_vlan.sh 100 192.168.0.0/24 si 192.168.0.10,192.168.0.50
+DHCP activo en ns-dhcp-vlan100 (192.168.0.2) rango 192.168.0.10 - 192.168.0.50, gateway 192.168.0.1
+VLAN 100 creada: red 192.168.0.0/24, gateway 192.168.0.1 en gw_vlan100
+>>> [10.0.10.3] create_network_vlan.sh 200 192.168.2.0/24 si 192.168.2.10,192.168.2.50
+DHCP activo en ns-dhcp-vlan200 (192.168.2.2) rango 192.168.2.10 - 192.168.2.50, gateway 192.168.2.1
+VLAN 200 creada: red 192.168.2.0/24, gateway 192.168.2.1 en gw_vlan200
+>>> [10.0.10.3] internet_to_network.sh 100 192.168.0.0/24
+Salida a internet habilitada para VLAN 100 (192.168.0.0/24) via ens3
+-A POSTROUTING -s 192.168.0.0/24 -o ens3 -j MASQUERADE
+-A FORWARD -s 192.168.0.0/24 -i gw_vlan100 -o ens3 -j ACCEPT
+-A FORWARD -d 192.168.0.0/24 -i ens3 -o gw_vlan100 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+>>> [10.0.10.3] internet_to_network.sh 200 192.168.2.0/24
+Salida a internet habilitada para VLAN 200 (192.168.2.0/24) via ens3
+-A POSTROUTING -s 192.168.2.0/24 -o ens3 -j MASQUERADE
+-A FORWARD -s 192.168.2.0/24 -i gw_vlan200 -o ens3 -j ACCEPT
+-A FORWARD -d 192.168.2.0/24 -i ens3 -o gw_vlan200 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+==================================================
+ 3. Server1: worker con contenedores
+==================================================
+>>> [10.0.10.1] init_worker.sh ens4
+44a77839-8a54-43e0-8ad6-4ccb8b9827e5
+    Bridge br-int
+        Port vo_c9cb1a
+            tag: 100
+            Interface vo_c9cb1a
+        Port vo_77c4b8
+            tag: 200
+            Interface vo_77c4b8
+        Port ens4
+            Interface ens4
+        Port br-int
+            Interface br-int
+                type: internal
+    ovs_version: "2.13.8"
+>>> [10.0.10.1] container_vlan100 ya existe, se reutiliza
+>>> [10.0.10.1] container_vlan200 ya existe, se reutiliza
+
+==================================================
+ 4. Server2: worker con VMs
+==================================================
+>>> [10.0.10.2] init_worker.sh ens4
+baa8600b-8220-4764-b51b-edaab6f6ac5d
+    Bridge br-int
+        Port tap200_2
+            tag: 200
+            Interface tap200_2
+        Port ens4
+            Interface ens4
+        Port tap100_1
+            tag: 100
+            Interface tap100_1
+        Port br-int
+            Interface br-int
+                type: internal
+    ovs_version: "2.13.8"
+>>> [10.0.10.2] vm_vlan100 ya esta en ejecucion, se reutiliza
+>>> [10.0.10.2] vm_vlan200 ya esta en ejecucion, se reutiliza
+
+==================================================
+ 5. Validacion
+==================================================
+Esperando 60 s a que las VMs obtengan IP...
+
+--- Topologia OVS ---
+## server1
+44a77839-8a54-43e0-8ad6-4ccb8b9827e5
+    Bridge br-int
+        Port vo_c9cb1a
+            tag: 100
+            Interface vo_c9cb1a
+        Port vo_77c4b8
+            tag: 200
+            Interface vo_77c4b8
+        Port ens4
+            Interface ens4
+        Port br-int
+            Interface br-int
+                type: internal
+    ovs_version: "2.13.8"
+## server2
+baa8600b-8220-4764-b51b-edaab6f6ac5d
+    Bridge br-int
+        Port tap200_2
+            tag: 200
+            Interface tap200_2
+        Port ens4
+            Interface ens4
+        Port tap100_1
+            tag: 100
+            Interface tap100_1
+        Port br-int
+            Interface br-int
+                type: internal
+    ovs_version: "2.13.8"
+## server3
+6f0eb54f-2ce9-4b85-8110-2a5df45533bc
+    Bridge br-int
+        Port dhcp_v100
+            tag: 100
+            Interface dhcp_v100
+                type: internal
+        Port ens4
+            Interface ens4
+        Port br-int
+            Interface br-int
+                type: internal
+        Port dhcp_v200
+            tag: 200
+            Interface dhcp_v200
+                type: internal
+        Port gw_vlan100
+            tag: 100
+            Interface gw_vlan100
+                type: internal
+        Port gw_vlan200
+            tag: 200
+            Interface gw_vlan200
+                type: internal
+    ovs_version: "2.13.8"
+
+--- Server3: iptables ---
+-P FORWARD DROP
+-A FORWARD -s 192.168.0.0/24 -i gw_vlan100 -o ens3 -j ACCEPT
+-A FORWARD -d 192.168.0.0/24 -i ens3 -o gw_vlan100 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A FORWARD -s 192.168.2.0/24 -i gw_vlan200 -o ens3 -j ACCEPT
+-A FORWARD -d 192.168.2.0/24 -i ens3 -o gw_vlan200 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-P POSTROUTING ACCEPT
+-A POSTROUTING -s 192.168.0.0/24 -o ens3 -j MASQUERADE
+-A POSTROUTING -s 192.168.2.0/24 -o ens3 -j MASQUERADE
+
+--- Server3: leases DHCP ---
+## VLAN 100
+1790683979 52:54:00:5d:0c:1d 192.168.0.30 cirros 01:52:54:00:5d:0c:1d
+1790683935 96:4f:86:82:47:a9 192.168.0.33 * 01:96:4f:86:82:47:a9
+## VLAN 200
+1790683980 52:54:00:dd:72:1c 192.168.2.34 cirros 01:52:54:00:dd:72:1c
+1790683940 32:a0:62:0c:08:f1 192.168.2.18 * 01:32:a0:62:0c:08:f1
+
+--- Conectividad de VMs desde su gateway ---
+## ping 192.168.0.30 (VLAN 100)
+PING 192.168.0.30 (192.168.0.30) 56(84) bytes of data.
+64 bytes from 192.168.0.30: icmp_seq=1 ttl=64 time=11.7 ms
+64 bytes from 192.168.0.30: icmp_seq=2 ttl=64 time=7.75 ms
+
+--- 192.168.0.30 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1002ms
+rtt min/avg/max/mdev = 7.754/9.711/11.668/1.957 ms
+## ping 192.168.0.33 (VLAN 100)
+PING 192.168.0.33 (192.168.0.33) 56(84) bytes of data.
+64 bytes from 192.168.0.33: icmp_seq=1 ttl=64 time=3.99 ms
+64 bytes from 192.168.0.33: icmp_seq=2 ttl=64 time=0.775 ms
+
+--- 192.168.0.33 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1001ms
+rtt min/avg/max/mdev = 0.775/2.380/3.985/1.605 ms
+## ping 192.168.2.34 (VLAN 200)
+PING 192.168.2.34 (192.168.2.34) 56(84) bytes of data.
+64 bytes from 192.168.2.34: icmp_seq=1 ttl=64 time=8.04 ms
+64 bytes from 192.168.2.34: icmp_seq=2 ttl=64 time=1.86 ms
+
+--- 192.168.2.34 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1001ms
+rtt min/avg/max/mdev = 1.863/4.951/8.040/3.088 ms
+## ping 192.168.2.18 (VLAN 200)
+PING 192.168.2.18 (192.168.2.18) 56(84) bytes of data.
+64 bytes from 192.168.2.18: icmp_seq=1 ttl=64 time=5.39 ms
+64 bytes from 192.168.2.18: icmp_seq=2 ttl=64 time=0.733 ms
+
+--- 192.168.2.18 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1002ms
+rtt min/avg/max/mdev = 0.733/3.059/5.385/2.326 ms
+
+--- Contenedores: IP e internet ---
+## container_vlan100
+60: eth0    inet 192.168.0.33/24 brd 192.168.0.255 scope global eth0\       valid_lft forever preferred_lft forever
+PING 8.8.8.8 (8.8.8.8): 56 data bytes
+64 bytes from 8.8.8.8: seq=0 ttl=110 time=37.158 ms
+64 bytes from 8.8.8.8: seq=1 ttl=110 time=36.359 ms
+64 bytes from 8.8.8.8: seq=2 ttl=110 time=35.687 ms
+
+--- 8.8.8.8 ping statistics ---
+3 packets transmitted, 3 packets received, 0% packet loss
+round-trip min/avg/max = 35.687/36.401/37.158 ms
+## container_vlan200
+62: eth0    inet 192.168.2.18/24 brd 192.168.2.255 scope global eth0\       valid_lft forever preferred_lft forever
+PING 8.8.8.8 (8.8.8.8): 56 data bytes
+64 bytes from 8.8.8.8: seq=0 ttl=110 time=35.469 ms
+64 bytes from 8.8.8.8: seq=1 ttl=110 time=35.346 ms
+64 bytes from 8.8.8.8: seq=2 ttl=110 time=35.444 ms
+
+--- 8.8.8.8 ping statistics ---
+3 packets transmitted, 3 packets received, 0% packet loss
+round-trip min/avg/max = 35.346/35.419/35.469 ms
+
+--- Aislamiento entre VLANs (debe fallar) ---
+## container_vlan100 -> container_vlan200 (192.168.2.18)
+PING 192.168.2.18 (192.168.2.18): 56 data bytes
+
+--- 192.168.2.18 ping statistics ---
+3 packets transmitted, 0 packets received, 100% packet loss
+OK: las VLANs estan aisladas
+
+==================================================
+ Actividad 1 desplegada
+==================================================
